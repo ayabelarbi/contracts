@@ -103,14 +103,24 @@ mod NameRegistry {
     }
 }
 
-// #[test]
-// fn test() {
-//     let mut contract = starknet::new_contract!(NameRegistry, Person { name: 0, address: 0 });
-//     let owner = Person { name: 0, address: 0 };
-//     contract.constructor(owner);
-//     let name = 1;
-//     let registration_type = RegistrationType::finite(1);
-//     contract.store_name(name, registration_type);
-//     let stored_name = contract.get_name(owner.address);
-//     assert_eq!(stored_name, name);
-// }
+// make the test
+#[cfg(test)]
+mod tests {
+    use snforge_std::{ declare, ContractClassTrait,start_cheat_caller_address };
+    use super::NameRegistry::{ContractState, Person, RegistrationType};
+    use using_dispatchers::{ INameRegistryDispatcher, INameRegistryDispatcherTrait };
+
+    #[test]
+    fn call_and_invoke() {
+        let contract = declare("NameRegistry").unwrap();
+        let (contract_address, _) = contract.deploy(@ArrayTrait::new()).unwrap();
+        let dispatcher = INameRegistryDispatcher { contract_address };
+
+        let name = dispatcher.get_name();
+        assert(name.is_none(), 'Name should be none');
+    }
+
+    // #[test]
+    // fn test_name_registry() {
+    // }
+}
