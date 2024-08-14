@@ -1,89 +1,117 @@
+use starknet::SyscallResultTrait;
+use starknet::{Store, SyscallResult};
+use starknet::storage_access::StorageBaseAddress;
+
+// ANCHOR: StorageAccessImpl
+impl StoreFelt252Array of Store<Array<felt252>> {
+    fn read(address_domain: u32, base: StorageBaseAddress) -> SyscallResult<Array<felt252>> {
+        Self::read_at_offset(address_domain, base, 0)
+    }
+
+    fn write(
+        address_domain: u32, base: StorageBaseAddress, value: Array<felt252>
+    ) -> SyscallResult<()> {
+        Self::write_at_offset(address_domain, base, 0, value)
+    }
+
+    fn read_at_offset(
+        address_domain: u32, base: StorageBaseAddress, mut offset: u8
+    ) -> SyscallResult<Array<felt252>> {
+        let mut arr: Array<felt252> = array![];
+
+        // Read the stored array's length. If the length is greater than 255, the read will fail.
+        let len: u8 = Store::<u8>::read_at_offset(address_domain, base, offset)
+            .expect('Storage Span too large');
+        offset += 1;
+
+        // Sequentially read all stored elements and append them to the array.
+        let exit = len + offset;
+        loop {
+            if offset >= exit {
+                break;
+            }
+
+            let value = Store::<felt252>::read_at_offset(address_domain, base, offset).unwrap();
+            arr.append(value);
+            offset += Store::<felt252>::size();
+        };
+
+        // Return the array.
+        Result::Ok(arr)
+    }
+
+    fn write_at_offset(
+        address_domain: u32, base: StorageBaseAddress, mut offset: u8, mut value: Array<felt252>
+    ) -> SyscallResult<()> {
+        // Store the length of the array in the first storage slot.
+        let len: u8 = value.len().try_into().expect('Storage - Span too large');
+        Store::<u8>::write_at_offset(address_domain, base, offset, len).unwrap();
+        offset += 1;
+
+        // Store the array elements sequentially
+        while let Option::Some(element) = value
+            .pop_front() {
+                Store::<felt252>::write_at_offset(address_domain, base, offset, element).unwrap();
+                offset += Store::<felt252>::size();
+            };
+
+        Result::Ok(())
+    }
+
+    fn size() -> u8 {
+        255 * Store::<felt252>::size()
+    }
+}
+// ANCHOR_END: StorageAccessImpl
+
+
 #[starknet::interface]
-trait ISimpleStorageBatch<TContractState> {
-    fn addBatch(ref self: TContractState, batchId: u128, batchLength: u128, lenList: u128);
-    fn executeSomething(ref self: TContractState, batchId: u128);
-    fn getCurrentBatch(self: @TContractState) -> (felt252, felt252, u64);
+trait ISimpleStorage<TContractState> {
+    fn storeArray(ref self: TContractState, arr: Array<felt252>);
+    fn read_array(self: @TContractState) -> Array<felt252>;
 }
 
-
 #[starknet::contract]
-mod SimpleStorageBatch {
-    use starknet::{ContractAddress};
-    use core::starknet::storage::{
-        Map, StoragePathEntry, StoragePointerReadAccess, StorageMapReadAccess,
-        StorageMapWriteAccess, StoragePointerWriteAccess
-    };
+mod SimpleStorage {
     use starknet::get_block_timestamp;
-    use core::starknet::storage_access::StorageBaseAddress; 
+    use core::starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use super::StoreFelt252Array;
 
     mod Errors {
-        pub const BATCH_NOT_STARTED: felt252 = 'batch havent started yet';
-    
+        pub const WAIT_TIME_NOT_ELAPSED: felt252 = 'Wait time has not elapsed';
     }
+
     #[storage]
     struct Storage {
-        batch: Map::<felt252, Map::<felt252, felt252>>,
-        batchLengths: felt252,
-        currentIndex: felt252, 
-        lastProcessedTime: u64,
+        lastExecutedTime: u64,
         interval: u64,
-        i : felt252,
+        arr: Array<felt252>
     }
 
     #[constructor]
     fn constructor(ref self: ContractState) {
-        self.batch.write(0,0,0);
-        self.batchLengths.write(1); 
-        self.currentIndex.write(0);
-        self.lastProcessedTime.write(get_block_timestamp());
-        self.interval.write(180);
-        self.i.write(0); 
+        self.lastExecutedTime.write(0);
+        self.interval.write(180); // 3 minutes in seconds
     }
 
     #[abi(embed_v0)]
-    impl SimpleStorageBatch of super::ISimpleStorageBatch<ContractState>{
-        //simple function to add batch, and init every memory place to 0
-        fn addBatch(
+    impl SimpleStorage of super::ISimpleStorage<ContractState> {
+        fn storeArray(
             ref self: ContractState,
-            batchId: u128,
-            batchLength: u128,
-            lenList: u128,
-        ){
-            let timeStamp = get_block_timestamp();
-          
-            for index in lenList{
-                self.batch.write(batchId, index, i);
-            };
-            self.lastProcessedTime.write(timeStamp); 
-        }
-    
-        fn executeSomething(
-            ref self: ContractState,
-            batchId: u128,
-        ){
-            let time_reminded: u64 = self.lastProcessedTime.read() + self.interval.read();
-            assert(get_block_timestamp() < time_reminded, Errors::BATCH_NOT_STARTED);
+            arr: Array<felt252>
+        ) {       
+            let current_time = get_block_timestamp();
+            let last_time = self.lastExecutedTime.read();
+            let interval = self.interval.read();
 
-            let batch_map = self.batch.read(batchId);
-            let mut i_ref = self.i.read();
+            assert(current_time >= last_time + interval, Errors::WAIT_TIME_NOT_ELAPSED);
 
-            for (index, value) in batch_map.iter() {
-                i_ref += 1; 
-                // Placeholder for waiting 3 minutes (not feasible in smart contracts)
-                // In actual implementation, this would be handled by external calls or events
-            
-            }; 
-
-            self.i.write(i_ref); // Write back the updated value
-            self.lastProcessedTime.write(get_block_timestamp());
-
+            self.arr.write(arr);
+            self.lastExecutedTime.write(current_time);
         }
 
-        fn getCurrentBatch(self: @ContractState) -> (felt252, felt252, u64){
-            let batchLength = self.batchLengths.read();
-            let currentIndex = self.currentIndex.read();
-            let lastProcessedTime = self.lastProcessedTime.read();
-            (batchLength, currentIndex, lastProcessedTime)
+        fn read_array(self: @ContractState) -> Array<felt252> {
+            self.arr.read()
         }
     }
 
