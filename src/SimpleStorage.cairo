@@ -1,3 +1,8 @@
+#[starknet::interface]
+trait ISimpleStorage<TContractState> {
+    fn storeArray(ref self: TContractState, arr: Array<felt252>);
+    fn read_array(self: @TContractState) -> Array<felt252>;
+}
 
 #[starknet::contract]
 mod SimpleStorage {
