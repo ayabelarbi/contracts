@@ -1,13 +1,14 @@
 use starknet::ContractAddress;
 
+
 #[starknet::interface]
-trait ISwap<TContractState> {
+trait ISwapTokens<TContractState> {
     fn create_swap(ref self: TContractState, swap: Swap, biding: Span<Asset>, asking: Span<Asset>) -> u256;
     fn accept_swap(ref self: TContractState, swap_id: u256) -> bool;
     fn cancel_swap(ref self: TContractState, swap_id: u256);
     fn get_swap(self: @TContractState, swap_id: u256) -> Swap;
     fn get_total_swaps(self: @TContractState) -> u256;
-    }
+}
 
 #[starknet::interface]
 trait ITransfer<TContractState> {
@@ -33,19 +34,24 @@ struct Swap {
 }
 
 #[starknet::contract]
-mod Swap {
+mod SwapTokens {
     use super::{Asset, Swap};
     use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
-    use Swap::interfaces::{
-        ISwap::ISwap, ITransfer::{ITransferDispatcher, ITransferDispatcherTrait},
+    // use swaptokens::interfaces::{
+    //     ISwapTokens::ISwapTokens, ITransfer::{ITransferDispatcher, ITransferDispatcherTrait},
+    // };
+    use super::{ISwapTokens, ITransferDispatcher, ITransferDispatcherTrait};
+    use core::starknet::storage::{
+        StoragePointerReadAccess, StoragePointerWriteAccess, StorageMapReadAccess,
+        StorageMapWriteAccess, Map
     };
 
     #[storage]
     struct Storage {
         total_swaps: u256,
-        swaps: LegacyMap<u256, Swap>,
-        swaps_biding: LegacyMap<(u256, u32), Asset>,
-        swaps_asking: LegacyMap<(u256, u32), Asset>,
+        swaps: Map<u256, Swap>,
+        swaps_biding: Map<(u256, u32), Asset>,
+        swaps_asking: Map<(u256, u32), Asset>,
     }
 
     //Event of Swap
@@ -88,13 +94,13 @@ mod Swap {
 
     // Errors of Swap
     mod Errors {
-        const INVALID_ADDRESS: felt252 = 'Swap: Invalid address';
-        const INVALID_EXPIRY: felt252 = 'Swap: Invalid expiry time';
+        const INVALID_ADDRESS: felt252 = 'SwapTokens: Invalid address';
+        const INVALID_EXPIRY: felt252 = 'SwapTokens: Invalid expiry time';
         const INVALID_ASSETS_LENGTH: felt252 = 'Swap: Invalid assets length';
     }
 
     #[abi(embed_v0)]
-    impl ISwapImpl of ISwap<ContractState> {
+    impl ISwapTokensImpl of ISwapTokens<ContractState> {
         fn create_swap(
             ref self: ContractState, swap: Swap, mut biding: Span<Asset>, mut asking: Span<Asset>
         ) -> u256 {

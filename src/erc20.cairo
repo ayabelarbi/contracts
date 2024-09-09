@@ -1,37 +1,36 @@
-#[starknet::contract]
+// SPDX-License-Identifier: MIT
+// Compatible with OpenZeppelin Contracts for Cairo ^0.15.0
 
-mod erc20 {
+#[starknet::contract]
+mod MyTokenDCA {
+    use openzeppelin::token::erc20::ERC20Component;
+    use openzeppelin::token::erc20::ERC20HooksEmptyImpl;
     use starknet::ContractAddress;
-    use openzeppelin::token::erc20::ERC20;
+
+    component!(path: ERC20Component, storage: erc20, event: ERC20Event);
+
+    #[abi(embed_v0)]
+    impl ERC20MixinImpl = ERC20Component::ERC20MixinImpl<ContractState>;
+
+    impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
 
     #[storage]
-    struct Storage {}
-
-    #[constructor]
-    fn constructor(
-        ref self: ContractState,
-        initial_supply: u256,
-        recipient: ContractAddress
-    ) {
-        let name = 'TestToken';
-        let symbol = 'TT';
-
-        let mut unsafe_state = ERC20::unsafe_new_contract_state();
-        ERC20::InternalImpl::initializer(ref unsafe_state, name, symbol);
-        ERC20::InternalImpl::_mint(ref unsafe_state, recipient, initial_supply);
+    struct Storage {
+        #[substorage(v0)]
+        erc20: ERC20Component::Storage,
     }
 
-    #[external(v0)]
-    #[generate_trait]
-    impl Ierc20Impl of Ierc20 {
-        fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
-            let unsafe_state = ERC20::unsafe_new_contract_state();
-            ERC20::ERC20Impl::balance_of(@unsafe_state, account)
-        }
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        #[flat]
+        ERC20Event: ERC20Component::Event,
+    }
 
-        fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u256) -> bool {
-            let mut unsafe_state = ERC20::unsafe_new_contract_state();
-            ERC20::ERC20Impl::transfer(ref unsafe_state, recipient, amount)
-        }
+    #[constructor]
+    fn constructor(ref self: ContractState, recipient: ContractAddress) {
+        self.erc20.initializer("MyTokenDCA", "MTDCA");
+
+        self.erc20.mint(recipient, 100000000000000000000);
     }
 }
