@@ -1,6 +1,6 @@
 ## Deployed contract adress : 
 TT Token - Test Token | 0x01633a1aeda4419d5d0cec94531305845c2b3d537ddd0815a97373201fdc9590
-
+MTDCA - My Token DCA | 0x05801d18e7386b0f7499b692bca8115f10c0f135a6f32d1a96049d94165dddab
 
 ## To run the smart contract 
 
